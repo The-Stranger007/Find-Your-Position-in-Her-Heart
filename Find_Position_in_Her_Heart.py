@@ -1,56 +1,85 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation as R
-ax_truely=[0]
-vx=[0] #Velocity in x,y,z
-vy=[0]
-vz=[0]
-sx=[0] #Displacement in x,y,z
-sy=[0]
-sz=[0]
-rotation=[np.zeros((3,3))]
-theta_x=[0]
-theta_y=[0]
-theta_z=[0]
-t=[0]
+v=[np.array([0,0,0])] #Velocity in x,y,z
+s=[[0,0,0]] #Displacement in x,y,z
+a=[[0,0,0]]
+w=[np.array([0,0,0])] #Angular velocity in x,y,z, from gyroscope
+sy_lab=[]
+sxz_lab=[]
+theta=[[0,0,0]]
+ta=[0] #t at each accelerometer reading
+tg=[0] #t at each gyroscope reading
 #theta is the angular displacement from the respective axis in radians
 
-def motion(ax,ay,az,wx,wy,wz,dta,dtg): #dta is the change in time from last accelerometer reading, dtg is that for gyroscope reading
-    #in user frame: +x to the right of user, +y upwards, +z into the page
+def account_for_g(ax0,ay0,az0): #Accounts for gravatational acceleration on Earth
+    g_abs=np.sqrt(ax0**2+ay0**2+az0**2)
+    if g_abs>=10.8 or g_abs<=8.8:
+        print('Warning: Inaccurate accelerometer reading for g (',round(g_abs,2),')')
+    return [ax0,ay0,az0]
 
-    theta_x.append(wx*dtg+theta_x[-1])
-    theta_y.append(wy*dtg+theta_y[-1])
-    theta_z.append(wz*dtg+theta_z[-1])
+def rotation(omega,t):
+    #Updates rotation based on gyroscope reading
+    w.append(omega)
+    theta.append((theta[-1]+0.5*(w[-1]+w[-2])*(t-tg[-1]))%(2*np.pi)) #Integrates rotation vector from angular velocity (gyroscope reading)
+     
 
-    r=R.from_rotvec(np.array([theta_x[-1],theta_y[-1],theta_z[-1]]))
+def motion(ax,ay,az,t): 
+    #Updates motion based on accelerometer reading
+    #(t-ta[-1]) is the change in t from last accelerometer reading
+
+    #Accounts for change in axis due to rotation
+    r=R.from_rotvec(np.array(theta[-1]))
     r_inv=r.inv()
     a_true=r_inv.apply(np.array([ax,ay,az]))
-    ax_truely.append(a_true[0])
+    a_true-=g
+    a.append(a_true)
+
+    #Integrating acceleration and velocity along original axises, using trapezoidal rule
+    v.append(0.5*(a[-1]+a[-2])*(t-ta[-1])+v[-1])
+    s.append(0.5*(v[-1]+v[-2])*(t-ta[-1])+s[-1])
     
 
-    vx.append(a_true[0]*dta+vx[-1]) #integrating acceleration to get velocity in user frame
-    vy.append(a_true[1]*dta+vy[-1])
-    vz.append(a_true[2]*dta+vz[-1])
-    sx.append(vx[-2]*dta) #[-2] is used as we want to find change in s from the v at time for last data input. Since we already appended v once, the corresponding v will be v[-2] 
-    sy.append(vy[-2]*dta)
-    sz.append(vz[-2]*dta) #Find position vector with respect to position at t=0
-    t.append(dta+t[-1])
-    return
-for i in range(10000):
-    motion(1,0,0,np.pi/30,np.pi/30,np.pi/25,0.01,0.01)
+def calculate_lab_motion(g):
+    down_direction=g/np.linalg.norm(g)
+    for i in s:
+        sy_lab.append(np.dot(i,down_direction))
+        sxz_lab.append(np.linalg.norm(np.cross(i,down_direction)))
 
-#Testing:
-t.remove(0)
-theta_y.remove(0)
-ax_truely.remove(0)
-sx.remove(0)
-sy.remove(0)
-sz.remove(0)
-s=[]
-for i in range(len(sx)):
-    s.append(np.sqrt(sx[i]**2+sy[i]**2+sz[i]**2))
-plt.plot(t,sx)
-plt.xlabel('time/s',fontsize=18)
-plt.ylabel('Displacement in lab frame x direction / m',fontsize=18)
+#Dummy data
+for i in range(1000):
+    if i==0:
+        g=np.array(account_for_g(0,-6.94,-6.94))
+    rotation(np.array([np.pi/30,np.pi/3,np.pi/25]),i/100)
+    motion(3,1,5,i/100)
+    ta.append(i/100)
+    tg.append(i/100)
+
+calculate_lab_motion(g)
+plt.subplot(2,2,1)
+plt.plot(ta,s)
+plt.xlabel('t/s',fontsize=18)
+plt.ylabel('Displacement in accelerometer axises at t=0/ m',fontsize=10)
+
+plt.subplot(2,2,2)
+plt.plot(ta,sy_lab)
+plt.xlabel('t/s',fontsize=18)
+plt.ylabel('Vertical Displacement/ m',fontsize=15)
+
+plt.subplot(2,2,3)
+plt.plot(ta,sxz_lab)
+plt.xlabel('t/s',fontsize=18)
+plt.ylabel('Horizontal Displacement/ m',fontsize=15)
+
+plt.subplot(2,2,4)
+rotvec=[]
+for i in theta:
+    if np.linalg.norm(i)==0:
+        rotvec.append([0,0,0])
+        continue
+    rotvec.append(i/np.linalg.norm(i))
+plt.plot(tg,rotvec)
+plt.xlabel('t/s',fontsize=18)
+plt.ylabel('Rotation Vector Elements',fontsize=15)
+
 plt.show()
-
