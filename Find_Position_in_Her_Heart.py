@@ -51,6 +51,7 @@ def calculate_lab_motion(g):
     for i in s:
         sy_lab.append(np.dot(i,down_direction))
         sxz_lab.append(np.linalg.norm(np.cross(i,down_direction)))
+    return -down_direction
 
 #Dummy data
 for i in range(1000):
@@ -61,67 +62,30 @@ for i in range(1000):
     ta.append(i/100)
     tg.append(i/100)
 
-calculate_lab_motion(g)
-# plt.subplot(2,2,1)
-# plt.plot(ta,s)
-# plt.xlabel('t/s',fontsize=18)
-# plt.ylabel('Displacement in accelerometer axises at t=0/ m',fontsize=10)
-
-# plt.subplot(2,2,2)
-# plt.plot(ta,sy_lab)
-# plt.xlabel('t/s',fontsize=18)
-# plt.ylabel('Vertical Displacement/ m',fontsize=15)
-
-# plt.subplot(2,2,3)
-# plt.plot(ta,sxz_lab)
-# plt.xlabel('t/s',fontsize=18)
-# plt.ylabel('Horizontal Displacement/ m',fontsize=15)
-
-# plt.subplot(2,2,4)
-# rotvec=[]
-# for i in theta:
-#     if np.linalg.norm(i)==0:
-#         rotvec.append([0,0,0])
-#         continue
-#     rotvec.append(i/np.linalg.norm(i))
-# plt.plot(tg,rotvec)
-# plt.xlabel('t/s',fontsize=18)
-# plt.ylabel('Rotation Vector Elements',fontsize=15)
-# plt.show()
-
-# ax=plt.axes(projection='3d')
-# ax.plot3D(sx,sy,sz)
-# print(s[-1][0]-sx[-1])
-# plt.show()
-
-# fig=plt.figure()
-# ax = fig.add_subplot(projection='3d')
-# ax.set_xlim3d((0, np.max(sx) + np.ptp(sx)*0.05))
-# ax.set_ylim3d((np.min(sy) - np.ptp(sy)*0.05, np.max(sy) + np.ptp(sy)*0.05))
-# ax.set_zlim3d((np.min(sz) - np.ptp(sz)*0.05, np.max(sz) + np.ptp(sz)*0.05))
-# line, = ax.plot([], [], lw=2)
-# point, = ax.plot([], [], 'ro')
-
-# def init():
-#   line.set_data([], [])
-#   point.set_data([], [])
-#   return line, point
-
-# def update(frame):
-#   line.set_data(sx[:frame], sy[:frame], sz[:frame])
-#   point.set_data(sx[frame], sy[frame],sz[:frame])
-#   return line, point
-# N=100
-# # data = np.array(list(gen(N))).T
-# ani = FuncAnimation(fig, update, N, frames=len(sx), interval=10000/N, blit=False)
-# plt.show()
+ver_dir=calculate_lab_motion(g)
 
 fig = plt.figure()
 ax = fig.add_subplot(111, projection='3d')
 line, = ax.plot(sx, sy, sz)
+s_abs=np.sqrt(sx[-1]**2+sy[-1]**2+sz[-1]**2)
+print(type(sy_lab[0]))
+
+ax.quiver(*[0,0,0], *ver_dir, color='red', length=s_abs, arrow_length_ratio=0.1)
+midpoint = s_abs*ver_dir / 2
+ax.text(*midpoint, 'Upwards', color='red', fontsize=8, ha='center', va='bottom')
+
+A, B, C, D = ver_dir[0], ver_dir[1], ver_dir[2], 0  # Plane equation: x + y + z - 1 = 0
+
+# Create a grid for the plane
+x_plane = np.linspace(-s_abs, s_abs, 2)
+y_plane = np.linspace(-s_abs, s_abs, 2)
+x_plane, y_plane = np.meshgrid(x_plane, y_plane)
+z_plane = (D - A * x_plane - B * y_plane) / C  # Solve for z
+ax.plot_surface(x_plane, y_plane, z_plane, alpha=0.5, color='cyan')
+
 def update(num, x, y, z, line):
     line.set_data(x[:num], y[:num])
     line.set_3d_properties(z[:num])
     return line,
-ani = FuncAnimation(fig, update, frames=len(t), fargs=[x, y, z, line], interval=100)
-plt.show()
+ani = FuncAnimation(fig, update, frames=len(ta), fargs=[sx, sy, sz, line], interval=1)
+plt.show() 
